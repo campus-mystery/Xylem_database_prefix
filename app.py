@@ -5,11 +5,12 @@ from pathlib import Path
 import threading
 import time
 import json
+import os
 
 app = Flask(__name__, template_folder='.')
 
 # ============================================================
-# CONFIGURATION (UNCHANGED)[cite: 1]
+# CONFIGURATION
 # ============================================================
 
 API_URL = "https://results.xylemlearning.com/wp-admin/admin-ajax.php"
@@ -19,9 +20,8 @@ EXAM_YEAR = "GIB-27SEP2026"
 
 TOTAL_DIGITS = 10
 
-OUTPUT_FILE = Path(
-    r"C:\Users\nisha\Desktop\gib results\results-95.txt"
-)
+# Updated to use a relative path compatible with Render's Linux environment
+OUTPUT_FILE = Path("results-95.txt")
 
 WORKERS = 50
 BATCH_SIZE = 1000
@@ -204,4 +204,5 @@ def run_checker():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, threaded=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
