@@ -23,7 +23,7 @@ TOTAL_DIGITS = 10
 # Updated to use a relative path compatible with Render's Linux environment
 OUTPUT_FILE = Path("results-95.txt")
 
-WORKERS = 50
+WORKERS = 10
 BATCH_SIZE = 1000
 REQUEST_TIMEOUT = 150
 
