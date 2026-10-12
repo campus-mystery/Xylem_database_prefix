@@ -9,7 +9,7 @@ import os
 app = Flask(__name__)
 
 # ============================================================
-# CONFIGURATION (UNCHANGED)[span_0](start_span)[span_0](end_span)
+# CONFIGURATION
 # ============================================================
 
 API_URL = "https://results.xylemlearning.com/wp-admin/admin-ajax.php"
@@ -19,9 +19,10 @@ EXAM_YEAR = "GIB-27SEP2026"
 
 TOTAL_DIGITS = 10
 
-WORKERS = 50
-BATCH_SIZE = 1000
-REQUEST_TIMEOUT = 15
+# Reduced workers slightly to prevent socket exhaustion on Render free tier
+WORKERS = 20
+BATCH_SIZE = 200
+REQUEST_TIMEOUT = 10
 
 # ============================================================
 # HTML TEMPLATE (EMBEDDED)
@@ -42,7 +43,7 @@ HTML_CONTENT = """
         
         <form id="checker-form" class="space-y-4">
             <div>
-                <label class="block text-sm font-medium mb-1 text-slate-300">Roll Prefix</label>
+                <label class="block text-sm font-medium mb-1 text-slate-300">Roll Prefix (e.g. 20261)</label>
                 <input type="text" id="roll_prefix" required placeholder="e.g. 2026" 
                     class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-base focus:outline-none focus:border-cyan-500">
             </div>
@@ -142,7 +143,7 @@ HTML_CONTENT = """
             };
 
             eventSource.onerror = () => {
-                statusText.textContent = 'Connection closed or finished.';
+                statusText.textContent = 'Connection closed or timeout.';
                 eventSource.close();
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -195,56 +196,25 @@ def check_roll(roll_number):
         text = response.text.strip()
 
         if status != 200:
-            return {
-                "roll": roll_number,
-                "status": "error",
-                "message": f"HTTP {status}"
-            }
+            return {"roll": roll_number, "status": "error"}
 
         if not text:
-            return {
-                "roll": roll_number,
-                "status": "error",
-                "message": "Empty response"
-            }
+            return {"roll": roll_number, "status": "error"}
 
         if (
             "Checking your browser before redirecting" in text
             or "anubis_challenge" in text
             or "/.within.website/" in text
         ):
-            return {
-                "roll": roll_number,
-                "status": "blocked",
-                "message": "Backend request was blocked by Anubis"
-            }
+            return {"roll": roll_number, "status": "blocked"}
 
         if "Result not found or not published yet" in text:
-            return {
-                "roll": roll_number,
-                "status": "not_found",
-                "message": None
-            }
+            return {"roll": roll_number, "status": "not_found"}
 
-        return {
-            "roll": roll_number,
-            "status": "found",
-            "message": None
-        }
+        return {"roll": roll_number, "status": "found"}
 
-    except requests.Timeout:
-        return {
-            "roll": roll_number,
-            "status": "error",
-            "message": "Request timeout"
-        }
-
-    except requests.RequestException as e:
-        return {
-            "roll": roll_number,
-            "status": "error",
-            "message": str(e)
-        }
+    except Exception:
+        return {"roll": roll_number, "status": "error"}
 
 
 # ============================================================
@@ -295,7 +265,7 @@ def run_checker():
                     for future in as_completed(futures):
                         try:
                             result = future.result()
-                        except Exception as e:
+                        except Exception:
                             checked += 1
                             errors += 1
                             continue
