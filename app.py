@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, Response
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 import threading
 import time
 import json
@@ -9,7 +8,7 @@ import json
 app = Flask(__name__, template_folder='.')
 
 # ============================================================
-# CONFIGURATION (UNCHANGED)
+# CONFIGURATION (UNCHANGED)[cite: 1]
 # ============================================================
 
 API_URL = "https://results.xylemlearning.com/wp-admin/admin-ajax.php"
@@ -18,9 +17,6 @@ EXAM_CLASS = "JEE"
 EXAM_YEAR = "GIB-27SEP2026"
 
 TOTAL_DIGITS = 10
-
-# Use a relative path so it works on Render's Linux container
-OUTPUT_FILE = Path("results-95.txt")
 
 WORKERS = 50
 BATCH_SIZE = 1000
@@ -147,8 +143,6 @@ def run_checker():
             end_roll = int(prefix_str + "9" * remaining_digits) + 1
             total = end_roll - start_roll
 
-            OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-
             yield f"data: {json.dumps({'type': 'start', 'total': total, 'start_roll': start_roll, 'end_roll': end_roll - 1, 'prefix': prefix_str})}\n\n"
 
             start_time = time.time()
@@ -158,43 +152,40 @@ def run_checker():
             errors = 0
             blocked = 0
 
-            with OUTPUT_FILE.open("w", encoding="utf-8") as output:
-                for batch_start in range(start_roll, end_roll, BATCH_SIZE):
-                    batch_end = min(batch_start + BATCH_SIZE, end_roll)
+            for batch_start in range(start_roll, end_roll, BATCH_SIZE):
+                batch_end = min(batch_start + BATCH_SIZE, end_roll)
 
-                    with ThreadPoolExecutor(max_workers=WORKERS) as executor:
-                        futures = [
-                            executor.submit(check_roll, roll)
-                            for roll in range(batch_start, batch_end)
-                        ]
+                with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+                    futures = [
+                        executor.submit(check_roll, roll)
+                        for roll in range(batch_start, batch_end)
+                    ]
 
-                        for future in as_completed(futures):
-                            try:
-                                result = future.result()
-                            except Exception as e:
-                                checked += 1
-                                errors += 1
-                                continue
-
+                    for future in as_completed(futures):
+                        try:
+                            result = future.result()
+                        except Exception as e:
                             checked += 1
-                            roll = result["roll"]
-                            status = result["status"]
+                            errors += 1
+                            continue
 
-                            if status == "found":
-                                found += 1
-                                output.write(f"{roll}\n")
-                                output.flush()
-                            elif status == "not_found":
-                                not_found += 1
-                            elif status == "blocked":
-                                blocked += 1
-                            else:
-                                errors += 1
+                        checked += 1
+                        roll = result["roll"]
+                        status = result["status"]
 
-                            yield f"data: {json.dumps({'type': 'progress', 'checked': checked, 'total': total, 'found': found, 'not_found': not_found, 'errors': errors, 'blocked': blocked, 'roll': roll, 'status': status})}\n\n"
+                        if status == "found":
+                            found += 1
+                        elif status == "not_found":
+                            not_found += 1
+                        elif status == "blocked":
+                            blocked += 1
+                        else:
+                            errors += 1
+
+                        yield f"data: {json.dumps({'type': 'progress', 'checked': checked, 'total': total, 'found': found, 'not_found': not_found, 'errors': errors, 'blocked': blocked, 'roll': roll, 'status': status})}\n\n"
 
             elapsed = time.time() - start_time
-            yield f"data: {json.dumps({'type': 'finish', 'checked': checked, 'found': found, 'not_found': not_found, 'errors': errors, 'blocked': blocked, 'time': round(elapsed, 2), 'output': str(OUTPUT_FILE)})}\n\n"
+            yield f"data: {json.dumps({'type': 'finish', 'checked': checked, 'found': found, 'not_found': not_found, 'errors': errors, 'blocked': blocked, 'time': round(elapsed, 2)})}\n\n"
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
