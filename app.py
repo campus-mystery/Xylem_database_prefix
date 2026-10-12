@@ -25,7 +25,7 @@ OUTPUT_FILE = Path("results-95.txt")
 
 WORKERS = 50
 BATCH_SIZE = 1000
-REQUEST_TIMEOUT = 15
+REQUEST_TIMEOUT = 150
 
 # ============================================================
 # THREAD-LOCAL HTTP SESSION
